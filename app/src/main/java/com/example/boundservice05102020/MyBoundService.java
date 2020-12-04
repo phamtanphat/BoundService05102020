@@ -1,11 +1,22 @@
 package com.example.boundservice05102020;
 
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
+import android.content.Context;
 import android.content.Intent;
+import android.os.Binder;
+import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
-
+import android.util.Log;
+import android.widget.Toast;
 import androidx.annotation.Nullable;
+import androidx.core.app.NotificationCompat;
+
+import java.util.Random;
 
 public class MyBoundService extends Service {
 
@@ -14,16 +25,19 @@ public class MyBoundService extends Service {
     String CHANNEL_ID = "MY_CHANNEL";
     int mProgress = 0;
     Random mRandom;
-
+    IBinder mMyBind;
+    OnListenProgress mOnListenProgress;
+    boolean isRunning = false;
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
-        return null;
+        return mMyBind;
     }
 
     @Override
     public void onCreate() {
         super.onCreate();
+        mMyBind = new MyBind();
         mRandom = new Random();
         mNotificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         mNotification = createNotification(this, CHANNEL_ID, mProgress);
@@ -32,24 +46,32 @@ public class MyBoundService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Handler handler = new Handler();
-        handler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                if (mProgress < 100) {
-                    try {
-                        mProgress += mRandom.nextInt(10) + 1;
-                        mNotification = createNotification(getApplicationContext(), CHANNEL_ID, mProgress);
-                        mNotificationManager.notify(1, mNotification);
-                    } catch (Exception e) {
-                        Log.d("BBB", e.getMessage());
+        if (isRunning == false){
+            Handler handler = new Handler();
+            handler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    if (mProgress < 100) {
+                        isRunning = true;
+                        try {
+                            mProgress += mRandom.nextInt(10) + 1;
+                            if (mOnListenProgress != null){
+                                mOnListenProgress.onProgressChange(mProgress);
+                            }
+                            mNotification = createNotification(getApplicationContext(), CHANNEL_ID, mProgress);
+                            mNotificationManager.notify(1, mNotification);
+                        } catch (Exception e) {
+                            Log.d("BBB", e.getMessage());
+                        }
+                        handler.postDelayed(this::run, 1000);
+                    } else {
+                        isRunning = false;
+                        stopSelf();
                     }
-                    handler.postDelayed(this::run, 1000);
-                } else {
-                    stopSelf();
                 }
-            }
-        }, 1000);
+            }, 1000);
+        }
+
         return START_NOT_STICKY;
     }
 
@@ -78,7 +100,7 @@ public class MyBoundService extends Service {
                         .setSmallIcon(R.mipmap.ic_launcher)
                         .setShowWhen(true)
                         .setContentTitle("Down load")
-                        .addAction(R.mipmap.ic_launcher, "Open app" , pendingIntent)
+                        .addAction(R.mipmap.ic_launcher, "Open app", pendingIntent)
                         .setProgress(100, progress, false);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -91,5 +113,15 @@ public class MyBoundService extends Service {
             mNotificationManager.createNotificationChannel(notificationChannel);
         }
         return builder.build();
+    }
+
+    class MyBind extends Binder {
+        MyBoundService getService() {
+            return MyBoundService.this;
+        }
+    }
+
+    public void getProgress(OnListenProgress mOnListenProgress) {
+        this.mOnListenProgress = mOnListenProgress;
     }
 }
